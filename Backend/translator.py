@@ -24,7 +24,6 @@ else:
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "weight", "best.pt")
-FONT_PATH = os.path.join(BASE_DIR, "fonts", "arial.ttf")
 
 # =========================
 # Carrega modelo UMA VEZ
@@ -47,7 +46,7 @@ def traduz_manga(input_image_path: str, output_image_path: str):
     image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(image_pil)
 
-    font = ImageFont.truetype(FONT_PATH, size=20)
+    font = ImageFont.load_default()
 
     for box in results[0].boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0])

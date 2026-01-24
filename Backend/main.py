@@ -1,9 +1,10 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-import shutil, uuid, os
-
-from translator import traduz_manga
+import shutil
+import uuid
+import os
+from .translator import traduz_manga
 
 app = FastAPI()
 
