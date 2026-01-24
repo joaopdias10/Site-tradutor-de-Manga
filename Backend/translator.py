@@ -6,12 +6,23 @@ from deep_translator import GoogleTranslator
 import textwrap
 from PIL import Image, ImageDraw, ImageFont
 import os
+import shutil
+
+
+# =========================
+# Tesseract (Windows + Linux / Render)
+# =========================
+tesseract_cmd = shutil.which("tesseract")
+
+if tesseract_cmd:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+else:
+    raise RuntimeError("Tesseract não encontrado no sistema")
 
 # =========================
 # Caminhos seguros
 # =========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 MODEL_PATH = os.path.join(BASE_DIR, "weight", "best.pt")
 FONT_PATH = os.path.join(BASE_DIR, "fonts", "arial.ttf")
 
