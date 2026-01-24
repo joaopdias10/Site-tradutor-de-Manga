@@ -11,8 +11,6 @@ venv/
 temp/
 *.log
 
-# Modelos e pesos (se não quiser versionar)
-*.pt
 
 # Sistema
 .DS_Store
