@@ -3,3 +3,7 @@ Siga o que está escrito em Tesseract, baixe os requirements
 Depois abra no cmd e rode o "comando uvicorn main:app --reload"
 
 Ai basta apenas abrir o arquivo index.html na pasta Frontend
+
+
+https://community.render.com/t/installing-tesseract/11213
+https://help.ovhcloud.com/csm/asia-public-cloud-ai-deploy-web-service-yolov5?id=kb_article_view&sysparm_article=KB0035477
