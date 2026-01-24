@@ -1,0 +1,5 @@
+Entre na pasta Backend, siga o que está escrito em Tesseract, baixe os requirements
+
+Depois na mesma pasta Backend abra no cmd e rode o "comando uvicorn main:app --reload"
+
+Ai basta apenas abrir o arquivo index.html na pasta Frontend
