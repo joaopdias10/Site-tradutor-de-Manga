@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ambientes virtuais
+.venv/
+venv/
+
+# Temporários
+temp/
+*.log
+
+# Modelos e pesos (se não quiser versionar)
+*.pt
+
+# Sistema
+.DS_Store
+Thumbs.db
