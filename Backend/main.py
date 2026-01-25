@@ -14,9 +14,10 @@ def root():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # "*" permite TUDO. Para produção, troque pela URL do seu frontend
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite GET, POST, PUT, DELETE...
+    allow_headers=["*"],  # Permite todos os cabeçalhos
 )
 
 @app.post("/traduzir")

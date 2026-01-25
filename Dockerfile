@@ -1,29 +1,30 @@
-# Usa uma versão leve do Python
 FROM python:3.10-slim
 
-# 1. Instala Tesseract e bibliotecas do sistema (OpenCV/YOLO precisam disso)
+# 1. Instala Tesseract e bibliotecas (Igual ao anterior)
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Define a pasta de trabalho
+# 2. Configura Permissões de Usuário (Obrigatório no Hugging Face)
+# O HF não gosta de rodar como 'root'. Criamos um usuário com ID 1000.
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+
 WORKDIR /app
 
-# 2. Copia requirements e instala dependências
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 3. Copia requirements e instala como o novo usuário
+COPY --chown=user requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# --- MELHORIA 1: Corrige o aviso do Ultralytics (YOLO) ---
-# Define a pasta de configuração do YOLO para /tmp (que é gravável)
-# Isso elimina aquele "WARNING ⚠️ user config directory is not writable"
+# Configura pasta temporária para o YOLO (evita erro de permissão)
 ENV YOLO_CONFIG_DIR="/tmp"
 
-# 3. Copia o código do projeto
-COPY . .
+# 4. Copia o resto dos arquivos com as permissões certas
+COPY --chown=user . .
 
-# --- MELHORIA 2: Porta Dinâmica ---
-# Usar a variável de ambiente $PORT é mais seguro para o Render.
-# O "sh -c" é necessário para que o Docker entenda a variável $PORT.
-CMD sh -c "uvicorn Backend.main:app --host 0.0.0.0 --port ${PORT:-10000}"
+# 5. MUDANÇA CRÍTICA: Porta 7860
+CMD ["uvicorn", "Backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
