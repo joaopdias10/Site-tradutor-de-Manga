@@ -4,21 +4,26 @@ from fastapi.responses import FileResponse
 import shutil
 import uuid
 import os
+
 from .translator import traduz_manga
 
+
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://site-tradutor-de-manga.vercel.app"],  # Permite só meu site hospedado na Vercel
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],  # Permite GET e POST
+    allow_headers=["*"],  # Permite todos os cabeçalhos
+)
+
 
 @app.get("/")
 def root():
     return {"status": "ok"}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # "*" permite TUDO. Para produção, troque pela URL do seu frontend
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite GET, POST, PUT, DELETE...
-    allow_headers=["*"],  # Permite todos os cabeçalhos
-)
 
 @app.post("/traduzir")
 async def traduzir(file: UploadFile = File(...)):
