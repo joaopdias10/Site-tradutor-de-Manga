@@ -1,13 +1,33 @@
-`Site-tradutor-de-Manga`
+## `📖 Site Tradutor de Mangá (EN → PT-BR)`
 
 
-Link do site: https://site-tradutor-de-manga.vercel.app/
+🔗 **Link do site:**  
+https://site-tradutor-de-manga.vercel.app/
+
+⏳ **Observações:**
+- O site não está finalizado, tem muitas melhorias a serem feitas, mas no momento ele já está funcionando.
+- O site apenas traduz balões de fala, por enquanto.
 
 
-Demora um pouco pra traduzir e a letra está pequena por enquanto, mas funciona
+## 🛠️ Tecnologias e Deploy
+
+- **Frontend:** hospedado na **Vercel**
+  > Simples, rápido e extremamente prático para deploy contínuo, bastando apenas fazer um commit nesse repositório.
+
+- **Backend:** hospedado no **Hugging Face Spaces**  
+  > Muito mais estável e performático do que o Render para aplicações de IA.
+  
+- Um forte agradescimento aos dois serviços
 
 
-Além disso, obrigado Vercel pela simplicidade e muito obrigado Hugging Face por ser muito melhor que Render
+## ⚠️ Observação sobre o repositório
 
+Foi necessário criar **dois repositórios**:
 
-PS: Tive que criar o mesmo repo no Hugging Face, os deploy no Front vem toda vez que dou um commit na pasta Frontend, e as alterações no back estão sendo feitas no Hugging, então talvez aqui acabe ficando desatualizado com futuras melhorias na tradução(Já que não pretendo mudar o front por enquanto), pra quem quiser conferir, esse é o link do meu repo no bendito Hugging Face: https://huggingface.co/spaces/joaopdias10/Site-tradutor-manga/tree/main
+- O **Frontend** faz deploy automático na Vercel sempre que há commits na pasta `Frontend` aqui no GitHub.
+- O **Backend** está no Hugging Face e os deploys acontecem automaticamente assim que faço um commit no repositório de lá.
+
+Por isso, este repositório pode ficar **desatualizado** em relação às melhorias feitas na pasta `Backend`, mas tentarei deixar os dois sincronizados. De todo modo, segue o link do repositório no Hugging Face.
+
+🔗 **Repositório no Hugging Face (Backend):**  
+https://huggingface.co/spaces/joaopdias10/Site-tradutor-manga/tree/main
