@@ -10,3 +10,6 @@ pillow
 deep-translator
 python-multipart
 requests
+python-dotenv
+langchain-core
+langchain-google-genai
