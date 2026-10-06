@@ -1,15 +1,16 @@
-from ultralytics import YOLO
-import cv2
-import pytesseract
-import re
 import os
+import re
 import shutil
 
+import cv2
+import pytesseract
 from deep_translator import GoogleTranslator
 from PIL import Image, ImageDraw
+from ultralytics import YOLO
 
-from .translator.translator import translate
 from .lettering.lettering import spell
+from .translator.LLM_translator import translate_page
+from .translator.translator import translate
 
 # ============================================================
 # Tesseract (Windows + Linux / Render)
@@ -52,27 +53,33 @@ def traduz_manga(input_image_path: str, output_image_path: str):
     draw = ImageDraw.Draw(image_pil)
 
 
-    for box in results[0].boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
+    baloes = []
+    for i,box in enumerate(results[0].boxes):
+        x1, y1, x2, y2 = map(int, box.xyxy[0]) #coordenadas
 
-        cropped = image[y1:y2, x1:x2]
+        cropped = image[y1:y2, x1:x2] #recorta a imagem
+    #cv2.imwrite(f'scr_manga/outputs/recorte_{i}.jpg', cropped)
 
-        config = r"--oem 3 --psm 6"
-        text = pytesseract.image_to_string(cropped, config=config)
+        config = r'--oem 3 --psm 6' #vi em um video e melhorou o resultado do ocr kk
+        text = pytesseract.image_to_string(cropped,config=config) #pega o texto da imagem
 
-        text = re.sub(r"\s+", " ", text).strip()
-        if not text:
+        text = re.sub(r'\s+', ' ', text).strip() #remove quebra de linha
+        if not text: #balão sem texto: nada a traduzir
             continue
+        text = text.capitalize() #formata o texto
 
-        text = text.capitalize()
-        text = GoogleTranslator(source="en", target="pt").translate(text)
-        #text = translate(text)
+        baloes.append(((x1, y1, x2, y2), text)) #guarda pra traduzir a pagina toda de uma vez
 
-        # Pinta o balão de branco
-        draw.rectangle([x1, y1, x2, y2], fill=(255, 255, 255))
+    #ordem de leitura de mangá: de cima pra baixo, da direita pra esquerda
+    baloes.sort(key=lambda b: (b[0][1] // 100, -b[0][2]))
 
+    #traduz a pagina inteira numa chamada so ao Gemini (com contexto entre os baloes)
+    textos = [t for _, t in baloes]
+    traducoes = translate_page(textos)
 
-        spell(draw, text, x1, y1, x2, y2, font_path)
+    for i, ((x1, y1, x2, y2), traducao) in enumerate(zip([c for c, _ in baloes], traducoes)):
+        print(f"Balão {i+1}: {textos[i]} -> {traducao}") #printa o balão
+        spell(draw, traducao, x1, y1, x2, y2, "font/KOMIKAX_.ttf") #Escreve na imagem
 
     # Salva resultado
     image_pil.save(output_image_path)
