@@ -8,6 +8,7 @@ from deep_translator import GoogleTranslator
 from PIL import Image, ImageDraw
 from ultralytics import YOLO
 
+from .inpaint.inpainter import remover_texto
 from .lettering.lettering import spell
 from .translator.LLM_translator import translate_page
 from .translator.translator import translate
@@ -48,10 +49,14 @@ def traduz_manga(input_image_path: str, output_image_path: str):
     # YOLO
     results = model(image)
 
-    # OpenCV → PIL
-    image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    draw = ImageDraw.Draw(image_pil)
 
+    #etapa 4: remove o texto original de todas as caixas de uma vez.
+    caixas = [tuple(map(int, box.xyxy[0])) for box in results[0].boxes]
+    image_limpa, relatorio = remover_texto(image, caixas, metodo="auto")
+
+    # OpenCV → PIL
+    image_pil = Image.fromarray(cv2.cvtColor(image_limpa, cv2.COLOR_BGR2RGB)) #converte do opencv para pil
+    draw = ImageDraw.Draw(image_pil) #objeto de desenho    
 
     baloes = []
     for i,box in enumerate(results[0].boxes):
@@ -79,7 +84,7 @@ def traduz_manga(input_image_path: str, output_image_path: str):
 
     for i, ((x1, y1, x2, y2), traducao) in enumerate(zip([c for c, _ in baloes], traducoes)):
         print(f"Balão {i+1}: {textos[i]} -> {traducao}") #printa o balão
-        spell(draw, traducao, x1, y1, x2, y2, "font/KOMIKAX_.ttf") #Escreve na imagem
+        spell(draw, traducao, x1, y1, x2, y2, font_path) #Escreve na imagem
 
     # Salva resultado
     image_pil.save(output_image_path)
