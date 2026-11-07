@@ -284,6 +284,19 @@ def cor_de_fundo(recorte, mascara):
 # 2. Rotas de preenchimento
 # ---------------------------------------------------------------------------
 
+def fundo_da_caixa(recorte, caixa_local):
+    """
+    Cor (BGR) que ficou atras do texto depois da limpeza: mediana da caixa
+    da deteccao no recorte JA LIMPO. Vale para qualquer rota (solido, lama,
+    telea) e e o que o lettering usa para escolher texto claro ou escuro.
+    """
+    x1, y1, x2, y2 = caixa_local
+    area = recorte[max(0, y1):y2, max(0, x1):x2]
+    if area.size == 0:
+        area = recorte
+    return tuple(int(c) for c in np.median(area.reshape(-1, area.shape[-1]), axis=0))
+
+
 def inpaint_solido(recorte, mascara, base=None):
     """
     Preenche com a cor de fundo amostrada. Ideal para balao chapado.
@@ -329,11 +342,18 @@ _MODELOS_DIR = os.path.join(os.path.dirname(__file__), "models")
 
 # engine: torch|onnx | norm: "0_1" (LaMa) / "-1_1" (AOT) / "migan"
 # zera: aplicar img*(1-mask) antes da inferencia | modulo: multiplo exigido
+# tamanho: lado maximo na inferencia. Reduzir demais engrossa o traco do
+#   texto no recorte reduzido e o LaMa passa a PRESERVA-lo como estrutura
+#   (deixa fantasma) em vez de apaga-lo. 1024 processa a maioria dos recortes
+#   perto do nativo; so recortes gigantes sao reduzidos (e ainda assim melhor
+#   que os 512 de antes).
 _BACKENDS = {
     "lama":      dict(engine="torch", arquivo="anime-manga-big-lama.pt",
-                      env="LAMA_MODEL",  norm="0_1",   zera=False, modulo=8),
+                      env="LAMA_MODEL",  norm="0_1",   zera=False, modulo=8,
+                      tamanho=1024),
     "lama_onnx": dict(engine="onnx",  arquivo="lama-manga-dynamic.onnx",
-                      env="LAMA_ONNX",   norm="0_1",   zera=False, modulo=8),
+                      env="LAMA_ONNX",   norm="0_1",   zera=False, modulo=8,
+                      tamanho=1024),
     "aot":       dict(engine="onnx",  arquivo="aot.onnx",
                       env="AOT_ONNX",    norm="-1_1",  zera=True,  modulo=8),
     "migan":     dict(engine="onnx",  arquivo="migan_pipeline_v2.onnx",
@@ -364,24 +384,34 @@ def _obter_backend(nome):
     return _modelos[nome]
 
 
-def _ajustar_para_modulo(img, modulo=8):
-    """Ajusta os lados para multiplo de `modulo` (exigencia dos modelos)."""
+def _ajustar_para_modulo(img, modulo=8, borda=cv2.BORDER_REFLECT):
+    """
+    Ajusta os lados para multiplo de `modulo` (exigencia dos modelos)
+    PREENCHENDO a borda - nao redimensionando. O resize distorcia o aspecto e
+    deixava a saida do modelo instavel: o MESMO recorte alternava entre apagar
+    limpo e deixar texto fantasma conforme as dimensoes mudavam uns poucos
+    pixels. A borda extra e recortada de volta depois da inferencia.
+    """
     h, w = img.shape[:2]
     nh = h + (modulo - h % modulo) % modulo
     nw = w + (modulo - w % modulo) % modulo
     if (nh, nw) == (h, w):
         return img
-    interp = cv2.INTER_NEAREST if img.ndim == 2 else cv2.INTER_LINEAR
-    return cv2.resize(img, (nw, nh), interpolation=interp)
+    return cv2.copyMakeBorder(img, 0, nh - h, 0, nw - w, borda)
 
 
 def _preparar(recorte, mascara, cfg, tamanho):
-    """Redimensiona mantendo proporcao e ajusta forma. Devolve (rgb, mask01)."""
+    """
+    Redimensiona mantendo proporcao e ajusta forma. Devolve
+    (rgb, mask01, (sh, sw)), onde (sh, sw) e o tamanho ANTES do padding de
+    modulo - usado para recortar a saida do modelo antes de voltar ao original.
+    """
     h, w = recorte.shape[:2]
     if cfg.get("quadrado"):
         lado = cfg["modulo"]  # MI-GAN: quadrado fixo (512)
         rec = cv2.resize(recorte, (lado, lado), interpolation=cv2.INTER_AREA)
         msk = cv2.resize(mascara, (lado, lado), interpolation=cv2.INTER_NEAREST)
+        sh, sw = lado, lado
     else:
         escala = tamanho / max(h, w) if max(h, w) > tamanho else 1.0
         if escala != 1.0:
@@ -390,11 +420,14 @@ def _preparar(recorte, mascara, cfg, tamanho):
             msk = cv2.resize(mascara, (nw, nh), interpolation=cv2.INTER_NEAREST)
         else:
             rec, msk = recorte, mascara
+        sh, sw = rec.shape[:2]
+        # imagem reflete a borda; mascara preenche com 0 (nao inpaintar o
+        # padding, que sera recortado fora de qualquer forma).
         rec = _ajustar_para_modulo(rec, cfg["modulo"])
-        msk = _ajustar_para_modulo(msk, cfg["modulo"])
+        msk = _ajustar_para_modulo(msk, cfg["modulo"], borda=cv2.BORDER_CONSTANT)
     rgb = cv2.cvtColor(rec, cv2.COLOR_BGR2RGB)
     msk = ((msk > 127) * 255).astype(np.uint8)
-    return rgb, msk
+    return rgb, msk, (sh, sw)
 
 
 def _rodar_modelo(nome, recorte, mascara, tamanho=512):
@@ -405,7 +438,7 @@ def _rodar_modelo(nome, recorte, mascara, tamanho=512):
     """
     modelo, cfg = _obter_backend(nome)
     h, w = recorte.shape[:2]
-    rgb, msk = _preparar(recorte, mascara, cfg, tamanho)
+    rgb, msk, (sh, sw) = _preparar(recorte, mascara, cfg, cfg.get("tamanho", tamanho))
     m01 = (msk > 0).astype(np.float32)
 
     if cfg["norm"] == "migan":
@@ -452,6 +485,8 @@ def _rodar_modelo(nome, recorte, mascara, tamanho=512):
             out_rgb = np.clip((arr + 1.0) * 127.5, 0, 255).astype(np.uint8)
 
     saida_bgr = cv2.cvtColor(out_rgb, cv2.COLOR_RGB2BGR)
+    # recorta o padding de modulo (borda refletida) antes de voltar ao original
+    saida_bgr = saida_bgr[:sh, :sw]
     if saida_bgr.shape[:2] != (h, w):
         saida_bgr = cv2.resize(saida_bgr, (w, h), interpolation=cv2.INTER_LINEAR)
 
@@ -503,7 +538,8 @@ def limpar_regiao(imagem, caixa, metodo="auto", margem=8, dilatacao=None):
 
     recorte = imagem[ay1:ay2, ax1:ax2]
     if recorte.size == 0:
-        return imagem, {"tipo": "vazio", "metodo": None, "tempo": 0.0}
+        return imagem, {"tipo": "vazio", "metodo": None, "tempo": 0.0,
+                        "fundo": None}
 
     # caixa da deteccao em coordenadas do recorte: ancora o filtro de glifos
     caixa_local = (x1 - ax1, y1 - ay1, x2 - ax1, y2 - ay1)
@@ -516,7 +552,8 @@ def limpar_regiao(imagem, caixa, metodo="auto", margem=8, dilatacao=None):
     # que a regiao ficou intocada - texto residual atras do lettering.
     if not mascara.any():
         return imagem, {"tipo": "vazio", "metodo": "nenhum", "tempo": 0.0,
-                        "cobertura": 0.0}
+                        "cobertura": 0.0,
+                        "fundo": fundo_da_caixa(recorte, caixa_local)}
 
     tipo = classificar_regiao(recorte, base)  # analisa pela mascara crua
 
@@ -525,11 +562,23 @@ def limpar_regiao(imagem, caixa, metodo="auto", margem=8, dilatacao=None):
     else:
         escolhido = metodo
 
+    # Em balao chapado, apagar o INTERIOR inteiro cobre o texto todo de uma
+    # vez - inclusive furigana e pontas finas de traco que o mask de glifos
+    # perde (era a fonte dos "pontinhos"). O interior ja vem recortado pela
+    # linha do balao (erosao em interior_do_balao), entao nao estoura o
+    # contorno nem come o fundo escuro ao redor. So vale para a rota solido;
+    # quando nao ha interior plausivel (None), cai no mask de glifos.
+    mascara_fill = mascara
+    if escolhido == "solido":
+        interior = interior_do_balao(recorte, caixa_local)
+        if interior is not None:
+            mascara_fill = interior
+
     inicio = time.perf_counter()
     try:
         if escolhido == "solido":
             # cor amostrada pelo anel da mascara CRUA (dentro do balao)
-            limpo = inpaint_solido(recorte, mascara, base=base)
+            limpo = inpaint_solido(recorte, mascara_fill, base=base)
         else:
             limpo = METODOS[escolhido](recorte, mascara)
     except (FileNotFoundError, ImportError, OSError, RuntimeError) as e:
@@ -543,9 +592,11 @@ def limpar_regiao(imagem, caixa, metodo="auto", margem=8, dilatacao=None):
     tempo = time.perf_counter() - inicio
 
     imagem[ay1:ay2, ax1:ax2] = limpo
-    cobertura = float((mascara > 0).mean())
+    cobertura = float((mascara_fill > 0).mean())
+    # fundo (BGR) que sobrou atras do texto: o lettering escolhe a cor por ele
     return imagem, {"tipo": tipo, "metodo": escolhido, "tempo": tempo,
-                    "cobertura": cobertura}
+                    "cobertura": cobertura,
+                    "fundo": fundo_da_caixa(limpo, caixa_local)}
 
 
 def remover_texto(imagem, caixas, metodo="auto", margem=8, dilatacao=None,
