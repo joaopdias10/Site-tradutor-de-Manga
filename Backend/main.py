@@ -5,7 +5,7 @@ import shutil
 import uuid
 import os
 
-from .translator import traduz_manga
+from .manga_translator import traduz_manga
 
 
 app = FastAPI()
