@@ -126,6 +126,31 @@ def interior_do_balao(recorte, caixa_texto, tolerancia=14, erosao=3):
     return interior
 
 
+def _mascara_texto_com_contorno(binaria_clara, caixa_texto):
+    """
+    Plano B para texto ESCURO com CONTORNO BRANCO sobre arte escura
+    (ex.: fala preta com borda branca por cima de cabelo preto).
+
+    Como o recorte e escuro, a binarizacao principal procura os pixels
+    claros - e o unico claro e o contorno, uma mancha grande e continua que
+    o filtro de componentes descarta (para nao apagar a linha do balao).
+    Resultado: mascara quase vazia e o texto fica na pagina.
+
+    Aqui a mancha clara DENTRO da caixa do detector e mantida e seus buracos
+    (as letras pretas) sao preenchidos: a mascara cobre letra + contorno.
+    Nunca passa da caixa do detector.
+    """
+    x1, y1, x2, y2 = caixa_texto
+    caixa = np.zeros_like(binaria_clara)
+    cv2.rectangle(caixa, (x1, y1), (x2 - 1, y2 - 1), 255, -1)
+    clara = cv2.bitwise_and(binaria_clara, caixa)
+    contornos, _ = cv2.findContours(clara, cv2.RETR_EXTERNAL,
+                                    cv2.CHAIN_APPROX_SIMPLE)
+    preenchida = np.zeros_like(clara)
+    cv2.drawContours(preenchida, contornos, -1, 255, -1)
+    return preenchida, caixa
+
+
 def gerar_mascara(recorte, caixa_texto=None, dilatacao=None, iteracoes=2,
                   area_min=4, fracao_area_max=0.35, caixas_ocr=None,
                   retornar_base=False):
@@ -184,6 +209,16 @@ def gerar_mascara(recorte, caixa_texto=None, dilatacao=None, iteracoes=2,
             cv2.rectangle(permitido, (cx1, cy1), (cx2, cy2), 255, -1)
         mascara = cv2.bitwise_and(mascara, permitido)
 
+    # Plano B: fundo escuro e mascara normal quase vazia (< 5% da caixa)
+    # costuma ser texto escuro com contorno branco. Ver
+    # _mascara_texto_com_contorno. So entra quando a rota normal falhou,
+    # entao as demais caixas seguem exatamente como antes.
+    caixa_contorno = None
+    area_caixa = max(1, (caixa_texto[2] - caixa_texto[0]) *
+                     (caixa_texto[3] - caixa_texto[1]))
+    if not escuro_no_claro and np.count_nonzero(mascara) < 0.05 * area_caixa:
+        mascara, caixa_contorno = _mascara_texto_com_contorno(binaria, caixa_texto)
+
     base = mascara.copy()
 
     if dilatacao is None:
@@ -197,7 +232,8 @@ def gerar_mascara(recorte, caixa_texto=None, dilatacao=None, iteracoes=2,
 
     # Contencao: dilatacao generosa sem limite come a linha do balao.
     # 1a opcao, o interior do balao; 2a, a caixa do detector com folga.
-    limite = interior_do_balao(recorte, caixa_texto)
+    limite = caixa_contorno if caixa_contorno is not None else \
+        interior_do_balao(recorte, caixa_texto)
     if limite is None:
         folga = max(4, dilatacao)
         limite = np.zeros_like(mascara)
